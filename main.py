@@ -81,11 +81,8 @@ def main(_):
     params = dict(
         config.as_dict(),
         model_name=FLAGS.model_name,
-        iterations_per_loop=FLAGS.iterations_per_loop,
         model_dir=FLAGS.model_dir,
-        num_shards=num_shards,
         num_examples_per_epoch=FLAGS.num_examples_per_epoch,
-        strategy=FLAGS.strategy,
         backbone_ckpt=FLAGS.backbone_ckpt,
         ckpt=FLAGS.ckpt,
         val_json_file=FLAGS.val_json_file,
@@ -205,53 +202,6 @@ def main(_):
                 # file could have been deleted already.
                 logging.info('Checkpoint %s no longer exists, skipping checkpoint',
                              ckpt)
-
-    elif FLAGS.mode == 'train_and_eval':
-        for cycle in range(config.num_epochs):
-            logging.info('Starting training cycle, epoch: %d.', cycle)
-            train_estimator = tf.estimator.tpu.TPUEstimator(
-                model_fn=model_fn_instance,
-                use_tpu=use_tpu,
-                train_batch_size=FLAGS.train_batch_size,
-                config=run_config,
-                params=params)
-            train_estimator.train(
-                input_fn=dataloader.InputReader(
-                    FLAGS.training_file_pattern,
-                    is_training=True,
-                    use_fake_data=FLAGS.use_fake_data,
-                    max_instances_per_image=max_instances_per_image),
-                steps=int(FLAGS.num_examples_per_epoch / FLAGS.train_batch_size))
-
-            logging.info('Starting evaluation cycle, epoch: %d.', cycle)
-            # Run evaluation after every epoch.
-            eval_params = dict(
-                params,
-                strategy=FLAGS.strategy,
-                input_rand_hflip=False,
-                is_training_bn=False,
-            )
-
-            eval_estimator = tf.estimator.tpu.TPUEstimator(
-                model_fn=model_fn_instance,
-                use_tpu=use_tpu,
-                train_batch_size=FLAGS.train_batch_size,
-                eval_batch_size=FLAGS.eval_batch_size,
-                config=run_config,
-                params=eval_params)
-            eval_results = eval_estimator.evaluate(
-                input_fn=dataloader.InputReader(
-                    FLAGS.validation_file_pattern,
-                    is_training=False,
-                    max_instances_per_image=max_instances_per_image),
-                steps=FLAGS.eval_samples // FLAGS.eval_batch_size,
-                name=FLAGS.eval_name)
-            logging.info('Evaluation results: %s', eval_results)
-            ckpt = tf.train.latest_checkpoint(FLAGS.model_dir)
-            utils.archive_ckpt(eval_results, eval_results['AP'], ckpt)
-
-    else:
-        logging.info('Mode not found.')
 
 
 if __name__ == '__main__':
