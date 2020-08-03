@@ -313,11 +313,9 @@ class InputReader(object):
       boxes *= image_scale
       is_crowds = tf.cast(is_crowds, dtype=tf.float32)
       boxes = pad_to_fixed_size(boxes, -1, [self._max_instances_per_image, 4])
-      is_crowds = pad_to_fixed_size(is_crowds, 0,
-                                    [self._max_instances_per_image, 1])
+      is_crowds = pad_to_fixed_size(is_crowds, 0, [self._max_instances_per_image, 1])
       areas = pad_to_fixed_size(areas, -1, [self._max_instances_per_image, 1])
-      classes = pad_to_fixed_size(classes, -1,
-                                  [self._max_instances_per_image, 1])
+      classes = pad_to_fixed_size(classes, -1, [self._max_instances_per_image, 1])
       return (image, cls_targets, box_targets, num_positives, source_id,
               image_scale, boxes, is_crowds, areas, classes, image_masks)
 
@@ -376,8 +374,7 @@ class InputReader(object):
       dataset = tf.data.TFRecordDataset(filename).prefetch(1)
       return dataset
 
-    dataset = dataset.interleave(
-        _prefetch_dataset, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.interleave(_prefetch_dataset, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     options = tf.data.Options()
     options.experimental_deterministic = not self._is_training
     dataset = dataset.with_options(options)
@@ -391,8 +388,7 @@ class InputReader(object):
         num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.prefetch(batch_size)
     dataset = dataset.batch(batch_size, drop_remainder=True)
-    dataset = dataset.map(
-        lambda *args: self.process_example(params, batch_size, *args))
+    dataset = dataset.map(lambda *args: self.process_example(params, batch_size, *args))
     dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
     if self._use_fake_data:
       # Turn this dataset into a semi-fake dataset which always loop at the

@@ -202,26 +202,15 @@ def _model_fn(features, labels, mode, params, model, variable_filter_fn=None):
     RuntimeError: if both ckpt and backbone_ckpt are set.
   """
   tf.summary.image('input_image', features, global_step)
-  training_hooks = []
 
-  def _model_outputs(inputs):
-    # Convert params (dict) to Config for easier access.
-    return model(inputs, config=hparams_config.Config(params))
-
-  precision = utils.get_precision(params['strategy'], params['mixed_precision'])
-  cls_outputs, box_outputs = utils.build_model_with_precision(
-      precision, _model_outputs, features, params['is_training_bn'])
-
-  levels = cls_outputs.keys()
-  for level in levels:
-    cls_outputs[level] = tf.cast(cls_outputs[level], tf.float32)
-    box_outputs[level] = tf.cast(box_outputs[level], tf.float32)
+  cls_outputs, box_outputs = model(features, config=hparams_config.Config(params))
 
   # First check if it is in PREDICT mode.
   if mode == tf.estimator.ModeKeys.PREDICT:
     predictions = {
         'image': features,
     }
+    levels = cls_outputs.keys()
     for level in levels:
       predictions['cls_outputs_%d' % level] = cls_outputs[level]
       predictions['box_outputs_%d' % level] = box_outputs[level]
@@ -352,47 +341,6 @@ def _model_fn(features, labels, mode, params, model, variable_filter_fn=None):
         'classes': classes,
     }
     eval_metrics = (metric_fn, metric_fn_inputs)
-
-  checkpoint = params.get('ckpt') or params.get('backbone_ckpt')
-
-  if checkpoint and mode == tf.estimator.ModeKeys.TRAIN:
-    # Initialize the model from an EfficientDet or backbone checkpoint.
-    if params.get('ckpt') and params.get('backbone_ckpt'):
-      raise RuntimeError('--backbone_ckpt and --checkpoint are mutually exclusive')
-
-    if params.get('backbone_ckpt'):
-      var_scope = params['backbone_name'] + '/'
-      if params['ckpt_var_scope'] is None:
-        # Use backbone name as default checkpoint scope.
-        ckpt_scope = params['backbone_name'] + '/'
-      else:
-        ckpt_scope = params['ckpt_var_scope'] + '/'
-    else:
-      # Load every var in the given checkpoint
-      var_scope = ckpt_scope = '/'
-
-    def scaffold_fn():
-      """Loads pretrained model through scaffold function."""
-      # logging.info('restore variables from %s', checkpoint)
-      var_map = utils.get_ckpt_var_map(
-          ckpt_path=checkpoint,
-          ckpt_scope=ckpt_scope,
-          var_scope=var_scope,
-          skip_mismatch=params['skip_mismatch'])
-
-      tf.train.init_from_checkpoint(checkpoint, var_map)
-
-      return tf.train.Scaffold()
-  elif mode == tf.estimator.ModeKeys.EVAL and moving_average_decay:
-
-    def scaffold_fn():
-      """Load moving average variables for eval."""
-      logging.info('Load EMA vars with ema_decay=%f', moving_average_decay)
-      restore_vars_dict = ema.variables_to_restore(ema_vars)
-      saver = tf.train.Saver(restore_vars_dict)
-      return tf.train.Scaffold(saver=saver)
-  else:
-    scaffold_fn = None
 
 
   return None
